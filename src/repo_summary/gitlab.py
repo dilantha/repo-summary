@@ -15,12 +15,10 @@ def check_gitlab_auth() -> bool:
         True if authenticated, False otherwise
     """
     import subprocess
+
     try:
         result = subprocess.run(
-            ["glab", "auth", "status"],
-            capture_output=True,
-            text=True,
-            check=True
+            ["glab", "auth", "status"], capture_output=True, text=True, check=True
         )
         # glab auth status outputs to stderr, not stdout
         output = result.stderr + result.stdout
@@ -29,7 +27,9 @@ def check_gitlab_auth() -> bool:
         return False
 
 
-def get_gitlab_groups(groups: List[str], include_languages: bool = False, include_mine: bool = False) -> Dict[str, List[Dict]]:
+def get_gitlab_groups(
+    groups: List[str], include_languages: bool = False, include_mine: bool = False
+) -> Dict[str, List[Dict]]:
     """Get repositories for all specified GitLab groups and optionally personal repos.
 
     Args:
@@ -56,7 +56,7 @@ def get_gitlab_groups(groups: List[str], include_languages: bool = False, includ
             task = progress.add_task("Fetching personal GitLab repos", total=None)
             repos = get_user_repos(include_languages)
             if repos:
-                all_repos['personal'] = repos
+                all_repos["personal"] = repos
                 console.print(f"[green]✓[/green] Found {len(repos)} personal repos")
             else:
                 console.print(f"[yellow]⚠[/yellow] No personal repos found")
@@ -77,7 +77,7 @@ def get_gitlab_groups(groups: List[str], include_languages: bool = False, includ
 
 
 def get_user_repos(include_languages: bool = False) -> List[Dict]:
-    """Get all personal repositories for the authenticated user.
+    """Get personal repositories for the authenticated user (under their username).
 
     Args:
         include_languages: Whether to fetch language breakdown
@@ -85,34 +85,82 @@ def get_user_repos(include_languages: bool = False) -> List[Dict]:
     Returns:
         List of repository data dictionaries
     """
-    # Fetch personal repos using glab CLI
-    output = run_command([
-        "glab", "repo", "list",
-        "--mine",
-        "--output", "json"
-    ])
-
-    if not output:
+    # First get the authenticated username
+    username = get_authenticated_username()
+    if not username:
         return []
 
-    repos_data = parse_json_output(output)
-    if not repos_data:
-        return []
+    # Fetch all repos with pagination
+    all_repos_data = []
+    page = 1
+    while True:
+        output = run_command(
+            [
+                "glab",
+                "repo",
+                "list",
+                "--mine",
+                "--per-page",
+                "100",
+                "--page",
+                str(page),
+                "--output",
+                "json",
+            ]
+        )
 
-    # Process each repository
+        if not output:
+            break
+
+        repos_data = parse_json_output(output)
+        if not repos_data:
+            break
+
+        all_repos_data.extend(repos_data)
+
+        # If we got fewer than per-page items, we've reached the end
+        if len(repos_data) < 100:
+            break
+
+        page += 1
+
+    # Filter to only repos owned by the user (personal repos)
     repos = []
-    for repo in repos_data:
-        repo_info = extract_repo_info(repo)
+    for repo in all_repos_data:
+        repo_namespace = repo.get("namespace", {}).get("path", "")
+        repo_kind = repo.get("namespace", {}).get("kind", "")
 
-        # Optionally fetch language data
-        if include_languages:
-            languages = get_repo_languages(repo.get('path_with_namespace', ''))
-            if languages:
-                repo_info['languages'] = languages
+        # Only include repos where namespace matches username (personal repos)
+        if repo_namespace == username and repo_kind == "user":
+            repo_info = extract_repo_info(repo)
 
-        repos.append(repo_info)
+            # Optionally fetch language data
+            if include_languages:
+                languages = get_repo_languages(repo.get("path_with_namespace", ""))
+                if languages:
+                    repo_info["languages"] = languages
+
+            repos.append(repo_info)
 
     return repos
+
+
+def get_authenticated_username() -> Optional[str]:
+    """Get the authenticated username from GitLab.
+
+    Returns:
+        Username string or None if fetch failed
+    """
+    output = run_command(["glab", "api", "user"])
+
+    if not output:
+        return None
+
+    user_data = parse_json_output(output)
+    if not user_data:
+        return None
+
+    return user_data.get("username")
 
 
 def get_group_repos(group: str, include_languages: bool = False) -> List[Dict]:
@@ -126,11 +174,7 @@ def get_group_repos(group: str, include_languages: bool = False) -> List[Dict]:
         List of repository data dictionaries
     """
     # Fetch repos using glab CLI
-    output = run_command([
-        "glab", "repo", "list",
-        "--group", group,
-        "--output", "json"
-    ])
+    output = run_command(["glab", "repo", "list", "--group", group, "--output", "json"])
 
     if not output:
         return []
@@ -146,9 +190,9 @@ def get_group_repos(group: str, include_languages: bool = False) -> List[Dict]:
 
         # Optionally fetch language data
         if include_languages:
-            languages = get_repo_languages(repo.get('path_with_namespace', ''))
+            languages = get_repo_languages(repo.get("path_with_namespace", ""))
             if languages:
-                repo_info['languages'] = languages
+                repo_info["languages"] = languages
 
         repos.append(repo_info)
 
@@ -165,24 +209,30 @@ def extract_repo_info(repo: Dict) -> Dict:
         Normalized repository information
     """
     return {
-        'name': repo.get('name', ''),
-        'path': repo.get('path_with_namespace', ''),
-        'description': repo.get('description', ''),
-        'url': repo.get('web_url', ''),
-        'ssh_url': repo.get('ssh_url_to_repo', ''),
-        'http_url': repo.get('http_url_to_repo', ''),
-        'visibility': repo.get('visibility', 'unknown'),
-        'archived': repo.get('archived', False),
-        'stars': repo.get('star_count', 0),
-        'forks': repo.get('forks_count', 0),
-        'created_at': format_date(repo.get('created_at')),
-        'updated_at': format_date(repo.get('last_activity_at')),
-        'default_branch': repo.get('default_branch', 'main'),
-        'topics': repo.get('topics', []),
-        'namespace': repo.get('namespace', {}).get('name', ''),
+        "name": repo.get("name", ""),
+        "path": repo.get("path_with_namespace", ""),
+        "description": repo.get("description", ""),
+        "url": repo.get("web_url", ""),
+        "ssh_url": repo.get("ssh_url_to_repo", ""),
+        "http_url": repo.get("http_url_to_repo", ""),
+        "visibility": repo.get("visibility", "unknown"),
+        "archived": repo.get("archived", False),
+        "stars": repo.get("star_count", 0),
+        "forks": repo.get("forks_count", 0),
+        "created_at": format_date(repo.get("created_at")),
+        "updated_at": format_date(repo.get("last_activity_at")),
+        "default_branch": repo.get("default_branch", "main"),
+        "topics": repo.get("topics", []),
+        "namespace": repo.get("namespace", {}).get("name", ""),
         # Statistics if available
-        'size': format_size(repo.get('statistics', {}).get('repository_size') if repo.get('statistics') else 0),
-        'size_bytes': repo.get('statistics', {}).get('repository_size', 0) if repo.get('statistics') else 0,
+        "size": format_size(
+            repo.get("statistics", {}).get("repository_size")
+            if repo.get("statistics")
+            else 0
+        ),
+        "size_bytes": repo.get("statistics", {}).get("repository_size", 0)
+        if repo.get("statistics")
+        else 0,
     }
 
 
@@ -196,13 +246,10 @@ def get_repo_languages(repo_path: str) -> Optional[Dict[str, float]]:
         Dictionary mapping language names to percentages, or None if fetch failed
     """
     # URL-encode the project path
-    encoded_path = urllib.parse.quote(repo_path, safe='')
+    encoded_path = urllib.parse.quote(repo_path, safe="")
 
     # Use glab API to fetch languages
-    output = run_command([
-        "glab", "api",
-        f"projects/{encoded_path}/languages"
-    ])
+    output = run_command(["glab", "api", f"projects/{encoded_path}/languages"])
 
     if not output:
         return None
