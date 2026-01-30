@@ -88,8 +88,14 @@ gitlab:
     - my-organization
   # Include personal/user repositories
   include_mine: false
+```
 
-github:
+> **Tip**: To get your GitLab group slugs, run:
+> ```bash
+> glab api /groups --paginate | jq -r '.[].full_path'
+> ```
+
+### GitHub CLI (gh)
   owners:
     - your-username
     - your-org
