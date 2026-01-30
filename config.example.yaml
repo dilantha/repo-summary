@@ -1,0 +1,44 @@
+# Repository Summary Generator Configuration
+# Copy this file to config.yaml and customize it for your needs
+
+gitlab:
+  # GitLab groups to fetch repositories from
+  # Run `glab repo list --group <group-name>` to see available groups
+  groups:
+    - example-group-1
+    - example-group-2
+    - my-organization
+    - team-alpha
+
+  # Include personal/user repositories (from `glab repo list --mine`)
+  include_mine: false
+
+github:
+  # GitHub usernames or organization names to fetch repositories from
+  # Run `gh repo list <owner>` to see available repos
+  owners:
+    - your-github-username
+    - your-org-name
+
+  # Maximum number of repositories to fetch per owner (default: 100)
+  limit: 100
+
+# Output configuration
+output:
+  # Directory where reports will be saved
+  directory: ./outputs
+
+  # Default output formats to generate
+  # Available: markdown, json, csv, html
+  formats:
+    - markdown
+    - json
+
+# Additional options
+options:
+  # Include detailed language breakdown for each repository
+  # Note: This requires additional API calls for GitLab and may be slower
+  include_languages: false
+
+  # Group repositories by platform or organization
+  group_by: platform  # Options: platform, organization
