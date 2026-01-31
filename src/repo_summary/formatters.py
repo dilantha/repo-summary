@@ -22,24 +22,26 @@ def format_markdown(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -
         True if formatting succeeded, False otherwise
     """
     try:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             # Write header
             f.write("# Repository Summary\n\n")
-            f.write(f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
+            f.write(
+                f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n\n"
+            )
 
             # Write GitLab repos
-            if 'gitlab' in data:
+            if "gitlab" in data:
                 f.write("## GitLab Repositories\n\n")
-                for group, repos in sorted(data['gitlab'].items()):
+                for group, repos in sorted(data["gitlab"].items()):
                     f.write(f"### {group}\n\n")
                     f.write(f"`glab repo list --group {group}`\n\n")
                     write_markdown_table(f, repos)
                     f.write("\n")
 
             # Write GitHub repos
-            if 'github' in data:
+            if "github" in data:
                 f.write("## GitHub Repositories\n\n")
-                for owner, repos in sorted(data['github'].items()):
+                for owner, repos in sorted(data["github"].items()):
                     f.write(f"### {owner}\n\n")
                     f.write(f"`gh repo list {owner}`\n\n")
                     write_markdown_table(f, repos)
@@ -71,10 +73,7 @@ def format_markdown_file(file_path: Path) -> bool:
     try:
         # Check if prettier is available
         result = subprocess.run(
-            ["npx", "prettier", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["npx", "prettier", "--version"], capture_output=True, text=True, timeout=5
         )
 
         if result.returncode != 0:
@@ -87,13 +86,17 @@ def format_markdown_file(file_path: Path) -> bool:
             capture_output=True,
             text=True,
             check=True,
-            timeout=10
+            timeout=10,
         )
 
         console.print(f"[green]✓[/green] Formatted markdown file with prettier")
         return True
 
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+    except (
+        subprocess.TimeoutExpired,
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+    ):
         # Formatting failed, but that's okay - file is still valid
         return False
 
@@ -106,28 +109,19 @@ def write_markdown_table(f, repos: List[Dict]):
         repos: List of repository dictionaries
     """
     # Write table header
-    f.write("| Project | Description | Language | Size | Last Updated | Archived |\n")
-    f.write("|---------|-------------|----------|------|--------------|----------|\n")
+    f.write("| Project | Description | Last Updated | Archived |\n")
+    f.write("|---------|-------------|--------------|----------|\n")
 
     # Write table rows
     for repo in repos:
-        name = repo.get('name', '')
-        path = repo.get('path', '')
-        desc = repo.get('description', '').replace('|', '\\|').replace('\n', ' ')[:100]
+        name = repo.get("name", "")
+        path = repo.get("path", "")
+        desc = repo.get("description", "").replace("|", "\\|").replace("\n", " ")[:100]
 
-        # Get language
-        language = repo.get('primary_language', '')
-        if not language and repo.get('languages'):
-            # Get top language
-            languages = repo.get('languages', {})
-            if languages:
-                language = max(languages.items(), key=lambda x: x[1])[0]
+        updated = repo.get("updated_at", "")
+        archived = "✓" if repo.get("archived", False) else ""
 
-        size = repo.get('size', '0 B')
-        updated = repo.get('updated_at', '')
-        archived = '✓' if repo.get('archived', False) else ''
-
-        f.write(f"| {path} | {desc} | {language} | {size} | {updated} | {archived} |\n")
+        f.write(f"| {path} | {desc} | {updated} | {archived} |\n")
 
 
 def format_json(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> bool:
@@ -141,12 +135,9 @@ def format_json(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> bo
         True if formatting succeeded, False otherwise
     """
     try:
-        output_data = {
-            'generated_at': datetime.now().isoformat(),
-            'platforms': data
-        }
+        output_data = {"generated_at": datetime.now().isoformat(), "platforms": data}
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(output_data, f, indent=2)
 
         console.print(f"[green]✓[/green] JSON report saved to {output_file}")
@@ -168,31 +159,31 @@ def format_csv(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> boo
         True if formatting succeeded, False otherwise
     """
     try:
-        with open(output_file, 'w', newline='') as f:
+        with open(output_file, "w", newline="") as f:
             # Define CSV columns
             fieldnames = [
-                'platform',
-                'organization',
-                'name',
-                'path',
-                'description',
-                'url',
-                'primary_language',
-                'stars',
-                'forks',
-                'open_issues',
-                'size',
-                'size_bytes',
-                'visibility',
-                'archived',
-                'created_at',
-                'updated_at',
-                'default_branch',
-                'license',
-                'topics',
+                "platform",
+                "organization",
+                "name",
+                "path",
+                "description",
+                "url",
+                "primary_language",
+                "stars",
+                "forks",
+                "open_issues",
+                "size",
+                "size_bytes",
+                "visibility",
+                "archived",
+                "created_at",
+                "updated_at",
+                "default_branch",
+                "license",
+                "topics",
             ]
 
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
 
             # Write rows for each platform
@@ -200,18 +191,20 @@ def format_csv(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> boo
                 for org, repos in orgs.items():
                     for repo in repos:
                         # Get primary language
-                        primary_lang = repo.get('primary_language', '')
-                        if not primary_lang and repo.get('languages'):
-                            languages = repo.get('languages', {})
+                        primary_lang = repo.get("primary_language", "")
+                        if not primary_lang and repo.get("languages"):
+                            languages = repo.get("languages", {})
                             if languages:
-                                primary_lang = max(languages.items(), key=lambda x: x[1])[0]
+                                primary_lang = max(
+                                    languages.items(), key=lambda x: x[1]
+                                )[0]
 
                         row = {
-                            'platform': platform,
-                            'organization': org,
-                            'primary_language': primary_lang,
-                            'topics': ', '.join(repo.get('topics', [])),
-                            **repo
+                            "platform": platform,
+                            "organization": org,
+                            "primary_language": primary_lang,
+                            "topics": ", ".join(repo.get("topics", [])),
+                            **repo,
                         }
                         writer.writerow(row)
 
@@ -236,11 +229,10 @@ def format_html(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> bo
     try:
         template = Template(HTML_TEMPLATE)
         html = template.render(
-            data=data,
-            generated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            data=data, generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write(html)
 
         console.print(f"[green]✓[/green] HTML report saved to {output_file}")
@@ -296,9 +288,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <tr>
                     <th onclick="sortTable(this, 0)">Project</th>
                     <th onclick="sortTable(this, 1)">Description</th>
-                    <th onclick="sortTable(this, 2)">Language</th>
-                    <th onclick="sortTable(this, 3)">Size</th>
-                    <th onclick="sortTable(this, 4)">Last Updated</th>
+                    <th onclick="sortTable(this, 2)">Last Updated</th>
                 </tr>
             </thead>
             <tbody>
@@ -308,14 +298,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         {% if repo.archived %}<span class="badge badge-archived">Archived</span>{% endif %}
                     </td>
                     <td>{{ repo.description[:100] }}</td>
-                    <td>
-                        {% if repo.primary_language %}
-                        <span class="badge badge-language">{{ repo.primary_language }}</span>
-                        {% elif repo.languages %}
-                        <span class="badge badge-language">{{ repo.languages.keys()|list|first }}</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ repo.size }}</td>
                     <td>{{ repo.updated_at }}</td>
                 </tr>
                 {% endfor %}
