@@ -134,11 +134,20 @@ def get_user_repos(include_languages: bool = False) -> List[Dict]:
         if repo_namespace == username and repo_kind == "user":
             repo_info = extract_repo_info(repo)
 
-            # Optionally fetch language data
+            # Optionally fetch language data and statistics
             if include_languages:
                 languages = get_repo_languages(repo.get("path_with_namespace", ""))
                 if languages:
                     repo_info["languages"] = languages
+                    repo_info["primary_language"] = get_primary_language(languages)
+
+                # Also fetch statistics when getting languages (both are expensive)
+                project_id = repo.get("id")
+                if project_id:
+                    stats = get_project_statistics(project_id)
+                    if stats:
+                        repo_info["size"] = format_size(stats.get("repository_size", 0))
+                        repo_info["size_bytes"] = stats.get("repository_size", 0)
 
             repos.append(repo_info)
 
@@ -188,11 +197,20 @@ def get_group_repos(group: str, include_languages: bool = False) -> List[Dict]:
     for repo in repos_data:
         repo_info = extract_repo_info(repo)
 
-        # Optionally fetch language data
+        # Optionally fetch language data and statistics
         if include_languages:
             languages = get_repo_languages(repo.get("path_with_namespace", ""))
             if languages:
                 repo_info["languages"] = languages
+                repo_info["primary_language"] = get_primary_language(languages)
+
+            # Also fetch statistics when getting languages (both are expensive)
+            project_id = repo.get("id")
+            if project_id:
+                stats = get_project_statistics(project_id)
+                if stats:
+                    repo_info["size"] = format_size(stats.get("repository_size", 0))
+                    repo_info["size_bytes"] = stats.get("repository_size", 0)
 
         repos.append(repo_info)
 
@@ -208,6 +226,10 @@ def extract_repo_info(repo: Dict) -> Dict:
     Returns:
         Normalized repository information
     """
+    size_bytes = 0
+    if repo.get("statistics"):
+        size_bytes = repo.get("statistics", {}).get("repository_size", 0)
+
     return {
         "name": repo.get("name", ""),
         "path": repo.get("path_with_namespace", ""),
@@ -224,15 +246,8 @@ def extract_repo_info(repo: Dict) -> Dict:
         "default_branch": repo.get("default_branch", "main"),
         "topics": repo.get("topics", []),
         "namespace": repo.get("namespace", {}).get("name", ""),
-        # Statistics if available
-        "size": format_size(
-            repo.get("statistics", {}).get("repository_size")
-            if repo.get("statistics")
-            else 0
-        ),
-        "size_bytes": repo.get("statistics", {}).get("repository_size", 0)
-        if repo.get("statistics")
-        else 0,
+        "size": format_size(size_bytes),
+        "size_bytes": size_bytes,
     }
 
 
@@ -267,6 +282,27 @@ def get_repo_languages(repo_path: str) -> Optional[Dict[str, float]]:
         lang: round((bytes_count / total_bytes) * 100, 1)
         for lang, bytes_count in languages_data.items()
     }
+
+
+def get_project_statistics(project_id: int) -> Optional[Dict]:
+    """Get repository statistics for a project.
+
+    Args:
+        project_id: GitLab project ID
+
+    Returns:
+        Dictionary containing repository statistics, or None if fetch failed
+    """
+    output = run_command(["glab", "api", f"projects/{project_id}?statistics=true"])
+
+    if not output:
+        return None
+
+    data = parse_json_output(output)
+    if not data:
+        return None
+
+    return data.get("statistics")
 
 
 def get_primary_language(languages: Optional[Dict[str, float]]) -> str:
