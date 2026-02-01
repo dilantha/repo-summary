@@ -11,6 +11,34 @@ from jinja2 import Template
 from .utils import console
 
 
+def truncate_description(text: str, max_length: int = 100, suffix: str = "...") -> str:
+    """Truncate text at word boundary with ellipsis.
+
+    Args:
+        text: Text to truncate
+        max_length: Maximum length before truncation (default: 100)
+        suffix: Suffix to add when truncating (default: "...")
+
+    Returns:
+        Truncated text with suffix, or original text if within limit
+    """
+    if len(text) <= max_length:
+        return text
+
+    # Truncate to max_length
+    truncated = text[:max_length]
+
+    # Find the last space before the truncation point
+    last_space = truncated.rfind(" ")
+
+    # Only use word boundary if it's reasonably close (at least 70% of max_length)
+    if last_space > max_length * 0.7:
+        return truncated[:last_space] + suffix
+    else:
+        # No good word boundary found, just truncate and add suffix
+        return truncated + suffix
+
+
 def format_markdown(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -> bool:
     """Format repository data as Markdown tables.
 
@@ -49,7 +77,7 @@ def format_markdown(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -
 
         console.print(f"[green]✓[/green] Markdown report saved to {output_file}")
 
-        # Format the markdown file using prettier if available
+        # Format the markdown file using mdformat if available
         format_markdown_file(output_file)
 
         return True
@@ -60,7 +88,7 @@ def format_markdown(data: Dict[str, Dict[str, List[Dict]]], output_file: Path) -
 
 
 def format_markdown_file(file_path: Path) -> bool:
-    """Format a Markdown file using prettier if available.
+    """Format a Markdown file using mdformat if available.
 
     Args:
         file_path: Path to markdown file to format
@@ -71,25 +99,25 @@ def format_markdown_file(file_path: Path) -> bool:
     import subprocess
 
     try:
-        # Check if prettier is available
+        # Check if mdformat is available
         result = subprocess.run(
-            ["npx", "prettier", "--version"], capture_output=True, text=True, timeout=5
+            ["uv", "run", "mdformat", "--version"], capture_output=True, text=True, timeout=5
         )
 
         if result.returncode != 0:
-            # Prettier not available, skip formatting
+            # mdformat not available, skip formatting
             return False
 
         # Format the file
         subprocess.run(
-            ["npx", "prettier", "--write", str(file_path)],
+            ["uv", "run", "mdformat", str(file_path)],
             capture_output=True,
             text=True,
             check=True,
             timeout=10,
         )
 
-        console.print(f"[green]✓[/green] Formatted markdown file with prettier")
+        console.print(f"[green]✓[/green] Formatted markdown file with mdformat")
         return True
 
     except (
@@ -116,7 +144,9 @@ def write_markdown_table(f, repos: List[Dict]):
     for repo in repos:
         name = repo.get("name", "")
         path = repo.get("path", "")
-        desc = repo.get("description", "").replace("|", "\\|").replace("\n", " ")[:100]
+        # Clean and truncate description with word-aware truncation
+        raw_desc = repo.get("description", "").replace("|", "\\|").replace("\n", " ")
+        desc = truncate_description(raw_desc, max_length=100)
 
         updated = repo.get("updated_at", "")
         archived = "✓" if repo.get("archived", False) else ""
@@ -297,7 +327,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <td><a href="{{ repo.url }}" target="_blank">{{ repo.path }}</a>
                         {% if repo.archived %}<span class="badge badge-archived">Archived</span>{% endif %}
                     </td>
-                    <td>{{ repo.description[:100] }}</td>
+                    <td>{{ repo.description|truncate(100, False, '...') }}</td>
                     <td>{{ repo.updated_at }}</td>
                 </tr>
                 {% endfor %}
@@ -328,7 +358,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         {% if repo.archived %}<span class="badge badge-archived">Archived</span>{% endif %}
                         {% if repo.visibility == 'private' %}<span class="badge badge-private">Private</span>{% endif %}
                     </td>
-                    <td>{{ repo.description[:100] }}</td>
+                    <td>{{ repo.description|truncate(100, False, '...') }}</td>
                     <td>
                         {% if repo.primary_language %}
                         <span class="badge badge-language">{{ repo.primary_language }}</span>
